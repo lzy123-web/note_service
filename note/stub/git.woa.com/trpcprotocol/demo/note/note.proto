@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+// package 格式：trpc.{app}.{server}
+package trpc.demo.note;
+
+// go_package 指明生成的 pb.go 文件在 git 上的存放地址。
+option go_package = "git.woa.com/trpcprotocol/demo/note";
+
+
+// =====================================================
+// Service 定义
+// =====================================================
+service NoteService {
+  // 创建笔记
+  rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse) {}
+
+  // 查询单条笔记（走 Cache Aside：Redis -> MongoDB）
+  rpc GetNote(GetNoteRequest) returns (GetNoteResponse) {}
+
+  // 查询用户笔记列表（直查 MongoDB，依赖 user_id+created_at 复合索引）
+  rpc ListNotes(ListNotesRequest) returns (ListNotesResponse) {}
+
+  // 删除笔记（先删 Mongo 再 Del Redis 缓存）
+  rpc DeleteNote(DeleteNoteRequest) returns (DeleteNoteResponse) {}
+}
+
+
+message Note {
+  string note_id    = 1; // 业务主键（字符串，不直接暴露 Mongo ObjectID）
+  string user_id    = 2; // 笔记所属用户
+  string title      = 3;
+  string content    = 4;
+  int64  created_at = 5; // unix 毫秒，避免 google.protobuf.Timestamp 跨语言/序列化开销
+  int64  updated_at = 6;
+}
+
+// CreateNote
+message CreateNoteRequest {
+  string user_id = 1;
+  string title   = 2;
+  string content = 3;
+}
+
+message CreateNoteResponse {
+  string note_id = 1; // 创建成功返回业务主键
+}
+
+
+// GetNote
+message GetNoteRequest {
+  string note_id = 1;
+}
+
+message GetNoteResponse {
+  Note note = 1;
+}
+
+
+// ListNotes
+// 必须分页：避免大用户全量拉取，同时为后续接缓存留扩展空间
+message ListNotesRequest {
+  string user_id   = 1;
+  int32  page      = 2; // 从 1 开始
+  int32  page_size = 3; 
+}
+
+message ListNotesResponse {
+  repeated Note notes = 1;
+  int64 total = 2; // 总条数，方便前端分页展示
+}
+
+// DeleteNote
+message DeleteNoteRequest {
+  string note_id = 1;
+  string user_id = 2; // 二次校验：防止删别人的笔记
+}
+
+message DeleteNoteResponse {
+  // 删除接口一般不需要返回业务字段，留空即可
+}

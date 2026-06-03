@@ -1,0 +1,54 @@
+global:                          # 全局配置
+  namespace: Development         
+  env_name: test                 
+
+server:                          # 服务端配置
+  app: demo                      # 应用名
+  server: note                   # 服务进程名
+  bin_path: /usr/local/trpc/bin/
+  conf_path: /usr/local/trpc/conf/
+  data_path: /usr/local/trpc/data/
+  filter:                        # 服务端拦截器（按顺序执行）
+    - simpledebuglog             # 来自 _ "trpc-filter/debuglog"：请求前后打 debug 日志
+    - recovery                   # 来自 _ "trpc-filter/recovery"：兜住 handler 内 panic
+  service:                       
+    - name: trpc.demo.note.NoteService   
+      ip: 127.0.0.1                       
+      port: 8000                          
+      network: tcp                        
+      protocol: trpc                      
+      timeout: 1000                       
+
+client:                        
+  timeout: 1000                  # 所有后端的默认超时
+  namespace: Development
+  filter:                        
+    - simpledebuglog
+  service:
+    # ---- MongoDB ----
+    - name: trpc.demo.note.mongodb
+      target: mongodb://root:example@127.0.0.1:27017/note_db
+      timeout: 1000
+
+    # ---- Redis ----
+    #   pool_size           = 最大连接数
+    #   min_idle_conns      = 最少空闲连接数
+    #   conn_max_idle_time  = 空闲连接最大存活时间，单位 ms
+    #   dial_timeout        = 建立连接超时，单位 ms
+    - name: trpc.demo.note.redis
+      target: redis://127.0.0.1:6379/0?pool_size=100&min_idle_conns=20&conn_max_idle_time=8000&dial_timeout=1000
+      timeout: 500
+
+plugins:                         # 插件配置
+  log:                        
+    default:                     
+      - writer: console         
+        level: debug
+      - writer: file             
+        level: info
+        writer_config:
+          filename: ./trpc.log
+          max_size: 10           # MB
+          max_backups: 10        # 保留多少个历史文件
+          max_age: 7             # 最长保留天数
+          compress: false
