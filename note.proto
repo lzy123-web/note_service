@@ -17,11 +17,20 @@ service NoteService {
   // 查询单条笔记
   rpc GetNote(GetNoteRequest) returns (GetNoteResponse) {}
 
-  // 查询用户笔记列表（
+  // 查询用户笔记列表
   rpc ListNotes(ListNotesRequest) returns (ListNotesResponse) {}
 
   // 删除笔记
   rpc DeleteNote(DeleteNoteRequest) returns (DeleteNoteResponse) {}
+
+  // 更新笔记（乐观锁）
+  rpc UpdateNote(UpdateNoteRequest) returns (UpdateNoteResponse) {}
+
+  // 查询笔记历史版本
+  rpc ListNoteVersions(ListNoteVersionsRequest) returns (ListNoteVersionsResponse) {}
+
+  // 恢复指定历史版本
+  rpc RestoreNoteVersion(RestoreNoteVersionRequest) returns (RestoreNoteVersionResponse) {}
 }
 
 
@@ -32,6 +41,7 @@ message Note {
   string content    = 4;
   int64  created_at = 5; 
   int64  updated_at = 6;
+  int32  version    = 7; // 版本号，创建时为 1，每次更新/恢复 +1
 }
 
 // CreateNote
@@ -76,4 +86,49 @@ message DeleteNoteRequest {
 
 message DeleteNoteResponse {
   // 删除接口一般不需要返回业务字段，留空即可
+}
+
+// UpdateNote
+message UpdateNoteRequest {
+  string note_id           = 1;
+  string user_id           = 2;
+  string title             = 3;
+  string content           = 4;
+  int32  expected_version  = 5; // 乐观锁：必须与当前版本匹配才允许更新
+}
+
+message UpdateNoteResponse {
+  Note note = 1; // 更新后的笔记
+}
+
+// ListNoteVersions
+message ListNoteVersionsRequest {
+  string note_id   = 1;
+  string user_id   = 2;
+  int32  page      = 3; // 从 1 开始
+  int32  page_size = 4; // 默认 20，上限 50
+}
+
+message NoteVersion {
+  int32  version    = 1;
+  string title      = 2;
+  string content    = 3;
+  int64  updated_at = 4;
+}
+
+message ListNoteVersionsResponse {
+  repeated NoteVersion versions = 1;
+  int64 total = 2; // 总条数
+}
+
+// RestoreNoteVersion
+message RestoreNoteVersionRequest {
+  string note_id          = 1;
+  string user_id          = 2;
+  int32  version          = 3; // 要恢复的目标历史版本号
+  int32  expected_version = 4; // 乐观锁：必须与当前版本匹配
+}
+
+message RestoreNoteVersionResponse {
+  Note note = 1; // 恢复后的笔记
 }

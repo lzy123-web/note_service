@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pb "git.woa.com/trpcprotocol/demo/note"
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/sync/singleflight"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -49,6 +50,7 @@ func (s *noteServiceImpl) CreateNote(
 		Content:   req.GetContent(),
 		CreatedAt: now,
 		UpdatedAt: now,
+		Version:   1,
 	}
 
 	if err := s.mongo.Insert(ctx, doc); err != nil {
@@ -166,6 +168,210 @@ func (s *noteServiceImpl) DeleteNote(
 		log.ErrorContextf(ctx, "mongo delete fail: %v", err)
 		return nil, errs.New(ErrCodeInternal, "db error")
 	}
+	s.delayedDoubleDelete(ctx, noteID)
+
+	return &pb.DeleteNoteResponse{}, nil
+}
+
+// 更新笔记（乐观锁）
+func (s *noteServiceImpl) UpdateNote(
+	ctx context.Context, req *pb.UpdateNoteRequest,
+) (*pb.UpdateNoteResponse, error) {
+	if req.GetNoteId() == "" || req.GetUserId() == "" || req.GetTitle() == "" {
+		return nil, errs.New(ErrCodeInvalidParam, "note_id, user_id and title required")
+	}
+	if req.GetExpectedVersion() <= 0 {
+		return nil, errs.New(ErrCodeInvalidParam, "expected_version must be positive")
+	}
+
+	// 校验所有权
+	doc, err := s.mongo.FindByID(ctx, req.GetNoteId())
+	if err != nil {
+		log.ErrorContextf(ctx, "mongo find fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+	if doc == nil {
+		return nil, errs.New(ErrCodeNoteNotFound, "note not found")
+	}
+	if doc.UserID != req.GetUserId() {
+		return nil, errs.New(ErrCodePermissionDenied, "permission denied")
+	}
+
+	// 先写历史快照
+	snapshot := &noteVersionDoc{
+		NoteID:    doc.NoteID,
+		Version:   doc.Version,
+		UserID:    doc.UserID,
+		Title:     doc.Title,
+		Content:   doc.Content,
+		UpdatedAt: doc.UpdatedAt,
+	}
+	if err := s.mongo.InsertVersion(ctx, snapshot); err != nil {
+		log.ErrorContextf(ctx, "insert version fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+
+	// 原子更新主文档（含版本校验）
+	before, err := s.mongo.FindOneAndUpdateVersion(ctx, req.GetNoteId(), req.GetExpectedVersion(), req.GetTitle(), req.GetContent())
+	if err != nil {
+		// FindOneAndUpdate 未匹配到文档 → 版本冲突或笔记不存在
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errs.New(ErrCodeVersionConflict, "version conflict")
+		}
+		log.ErrorContextf(ctx, "find one and update fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+	_ = before // 已通过 InsertVersion 保存
+
+	// 读取更新后的文档返回
+	updated, err := s.mongo.FindByID(ctx, req.GetNoteId())
+	if err != nil {
+		log.ErrorContextf(ctx, "mongo find after update fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+
+	// 延迟双删缓存
+	s.delayedDoubleDelete(ctx, req.GetNoteId())
+
+	return &pb.UpdateNoteResponse{Note: docToPB(updated)}, nil
+}
+
+// 查询笔记历史版本
+func (s *noteServiceImpl) ListNoteVersions(
+	ctx context.Context, req *pb.ListNoteVersionsRequest,
+) (*pb.ListNoteVersionsResponse, error) {
+	if req.GetNoteId() == "" || req.GetUserId() == "" {
+		return nil, errs.New(ErrCodeInvalidParam, "note_id and user_id required")
+	}
+
+	// 校验所有权
+	doc, err := s.mongo.FindByID(ctx, req.GetNoteId())
+	if err != nil {
+		log.ErrorContextf(ctx, "mongo find fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+	if doc == nil {
+		return nil, errs.New(ErrCodeNoteNotFound, "note not found")
+	}
+	if doc.UserID != req.GetUserId() {
+		return nil, errs.New(ErrCodePermissionDenied, "permission denied")
+	}
+
+	page, size := req.GetPage(), req.GetPageSize()
+	if size <= 0 || size > 50 {
+		size = 20
+	}
+
+	versions, total, err := s.mongo.ListVersionsByNoteID(ctx, req.GetNoteId(), page, size)
+	if err != nil {
+		log.ErrorContextf(ctx, "mongo list versions fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+
+	pbVersions := make([]*pb.NoteVersion, 0, len(versions))
+	for _, v := range versions {
+		pbVersions = append(pbVersions, &pb.NoteVersion{
+			Version:   v.Version,
+			Title:     v.Title,
+			Content:   v.Content,
+			UpdatedAt: v.UpdatedAt,
+		})
+	}
+	return &pb.ListNoteVersionsResponse{Versions: pbVersions, Total: total}, nil
+}
+
+// 恢复指定历史版本
+func (s *noteServiceImpl) RestoreNoteVersion(
+	ctx context.Context, req *pb.RestoreNoteVersionRequest,
+) (*pb.RestoreNoteVersionResponse, error) {
+	if req.GetNoteId() == "" || req.GetUserId() == "" {
+		return nil, errs.New(ErrCodeInvalidParam, "note_id and user_id required")
+	}
+	if req.GetVersion() <= 0 {
+		return nil, errs.New(ErrCodeInvalidParam, "version must be positive")
+	}
+	if req.GetExpectedVersion() <= 0 {
+		return nil, errs.New(ErrCodeInvalidParam, "expected_version must be positive")
+	}
+
+	// 校验所有权
+	doc, err := s.mongo.FindByID(ctx, req.GetNoteId())
+	if err != nil {
+		log.ErrorContextf(ctx, "mongo find fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+	if doc == nil {
+		return nil, errs.New(ErrCodeNoteNotFound, "note not found")
+	}
+	if doc.UserID != req.GetUserId() {
+		return nil, errs.New(ErrCodePermissionDenied, "permission denied")
+	}
+
+	// 查目标历史版本是否存在
+	verDoc, err := s.mongo.FindVersion(ctx, req.GetNoteId(), req.GetVersion())
+	if err != nil {
+		log.ErrorContextf(ctx, "mongo find version fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+	if verDoc == nil {
+		return nil, errs.New(ErrCodeVersionNotFound, "version not found")
+	}
+
+	// 先写当前版本快照到历史
+	snapshot := &noteVersionDoc{
+		NoteID:    doc.NoteID,
+		Version:   doc.Version,
+		UserID:    doc.UserID,
+		Title:     doc.Title,
+		Content:   doc.Content,
+		UpdatedAt: doc.UpdatedAt,
+	}
+	if err := s.mongo.InsertVersion(ctx, snapshot); err != nil {
+		log.ErrorContextf(ctx, "insert version fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+
+	// 原子更新主文档：恢复为历史版本的内容（含版本校验）
+	_, err = s.mongo.FindOneAndUpdateVersion(ctx, req.GetNoteId(), req.GetExpectedVersion(), verDoc.Title, verDoc.Content)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errs.New(ErrCodeVersionConflict, "version conflict")
+		}
+		log.ErrorContextf(ctx, "find one and update fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+
+	// 读取恢复后的文档返回
+	updated, err := s.mongo.FindByID(ctx, req.GetNoteId())
+	if err != nil {
+		log.ErrorContextf(ctx, "mongo find after restore fail: %v", err)
+		return nil, errs.New(ErrCodeInternal, "db error")
+	}
+
+	// 延迟双删缓存
+	s.delayedDoubleDelete(ctx, req.GetNoteId())
+
+	return &pb.RestoreNoteVersionResponse{Note: docToPB(updated)}, nil
+}
+
+// docToPB 把内部存储模型转为对外协议结构。
+func docToPB(d *noteDoc) *pb.Note {
+	if d == nil {
+		return nil
+	}
+	return &pb.Note{
+		NoteId:    d.NoteID,
+		UserId:    d.UserID,
+		Title:     d.Title,
+		Content:   d.Content,
+		CreatedAt: d.CreatedAt,
+		UpdatedAt: d.UpdatedAt,
+		Version:   d.Version,
+	}
+}
+
+// delayedDoubleDelete 对指定 note_id 执行延迟双删：同步删一次 + 异步延迟再删一次。
+func (s *noteServiceImpl) delayedDoubleDelete(ctx context.Context, noteID string) {
 	// 第一次删 cache：同步执行
 	if err := s.cache.DelNote(ctx, noteID); err != nil {
 		log.WarnContextf(ctx, "cache del fail (1st): %v", err)
@@ -184,21 +390,4 @@ func (s *noteServiceImpl) DeleteNote(
 			log.WarnContextf(bgCtx, "cache del fail (2nd, delayed): note_id=%s, err=%v", noteID, err)
 		}
 	}()
-
-	return &pb.DeleteNoteResponse{}, nil
-}
-
-// docToPB 把内部存储模型转为对外协议结构。
-func docToPB(d *noteDoc) *pb.Note {
-	if d == nil {
-		return nil
-	}
-	return &pb.Note{
-		NoteId:    d.NoteID,
-		UserId:    d.UserID,
-		Title:     d.Title,
-		Content:   d.Content,
-		CreatedAt: d.CreatedAt,
-		UpdatedAt: d.UpdatedAt,
-	}
 }

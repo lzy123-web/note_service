@@ -14,4 +14,6 @@ const (
 	ErrCodeNoteNotFound     = 10002 // 笔记不存在
 	ErrCodePermissionDenied = 10003 // 越权操作（如删除别人的笔记）
 	ErrCodeInternal         = 10004 // 服务器内部错误（DB/Cache 故障等）
+	ErrCodeVersionConflict  = 10005 // 版本冲突（乐观锁校验失败）
+	ErrCodeVersionNotFound  = 10006 // 历史版本不存在
 )

@@ -105,6 +105,51 @@ func (mr *MockNoteServiceServiceMockRecorder) ListNotes(ctx, req any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotes", reflect.TypeOf((*MockNoteServiceService)(nil).ListNotes), ctx, req)
 }
 
+// UpdateNote mocks base method.
+func (m *MockNoteServiceService) UpdateNote(ctx context.Context, req *UpdateNoteRequest) (*UpdateNoteResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateNote", ctx, req)
+	ret0, _ := ret[0].(*UpdateNoteResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateNote indicates an expected call of UpdateNote.
+func (mr *MockNoteServiceServiceMockRecorder) UpdateNote(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNote", reflect.TypeOf((*MockNoteServiceService)(nil).UpdateNote), ctx, req)
+}
+
+// ListNoteVersions mocks base method.
+func (m *MockNoteServiceService) ListNoteVersions(ctx context.Context, req *ListNoteVersionsRequest) (*ListNoteVersionsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNoteVersions", ctx, req)
+	ret0, _ := ret[0].(*ListNoteVersionsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNoteVersions indicates an expected call of ListNoteVersions.
+func (mr *MockNoteServiceServiceMockRecorder) ListNoteVersions(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNoteVersions", reflect.TypeOf((*MockNoteServiceService)(nil).ListNoteVersions), ctx, req)
+}
+
+// RestoreNoteVersion mocks base method.
+func (m *MockNoteServiceService) RestoreNoteVersion(ctx context.Context, req *RestoreNoteVersionRequest) (*RestoreNoteVersionResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestoreNoteVersion", ctx, req)
+	ret0, _ := ret[0].(*RestoreNoteVersionResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RestoreNoteVersion indicates an expected call of RestoreNoteVersion.
+func (mr *MockNoteServiceServiceMockRecorder) RestoreNoteVersion(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreNoteVersion", reflect.TypeOf((*MockNoteServiceService)(nil).RestoreNoteVersion), ctx, req)
+}
+
 // MockNoteServiceClientProxy is a mock of NoteServiceClientProxy interface.
 type MockNoteServiceClientProxy struct {
 	ctrl     *gomock.Controller
@@ -211,4 +256,64 @@ func (mr *MockNoteServiceClientProxyMockRecorder) ListNotes(ctx, req any, opts .
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, req}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotes", reflect.TypeOf((*MockNoteServiceClientProxy)(nil).ListNotes), varargs...)
+}
+
+// UpdateNote mocks base method.
+func (m *MockNoteServiceClientProxy) UpdateNote(ctx context.Context, req *UpdateNoteRequest, opts ...client.Option) (*UpdateNoteResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, req}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "UpdateNote", varargs...)
+	ret0, _ := ret[0].(*UpdateNoteResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateNote indicates an expected call of UpdateNote.
+func (mr *MockNoteServiceClientProxyMockRecorder) UpdateNote(ctx, req any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, req}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNote", reflect.TypeOf((*MockNoteServiceClientProxy)(nil).UpdateNote), varargs...)
+}
+
+// ListNoteVersions mocks base method.
+func (m *MockNoteServiceClientProxy) ListNoteVersions(ctx context.Context, req *ListNoteVersionsRequest, opts ...client.Option) (*ListNoteVersionsResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, req}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListNoteVersions", varargs...)
+	ret0, _ := ret[0].(*ListNoteVersionsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNoteVersions indicates an expected call of ListNoteVersions.
+func (mr *MockNoteServiceClientProxyMockRecorder) ListNoteVersions(ctx, req any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, req}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNoteVersions", reflect.TypeOf((*MockNoteServiceClientProxy)(nil).ListNoteVersions), varargs...)
+}
+
+// RestoreNoteVersion mocks base method.
+func (m *MockNoteServiceClientProxy) RestoreNoteVersion(ctx context.Context, req *RestoreNoteVersionRequest, opts ...client.Option) (*RestoreNoteVersionResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, req}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "RestoreNoteVersion", varargs...)
+	ret0, _ := ret[0].(*RestoreNoteVersionResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RestoreNoteVersion indicates an expected call of RestoreNoteVersion.
+func (mr *MockNoteServiceClientProxyMockRecorder) RestoreNoteVersion(ctx, req any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, req}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreNoteVersion", reflect.TypeOf((*MockNoteServiceClientProxy)(nil).RestoreNoteVersion), varargs...)
 }

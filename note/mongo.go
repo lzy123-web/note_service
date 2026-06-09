@@ -14,8 +14,9 @@ import (
 
 // 数据库 / 集合常量
 const (
-	mongoDB   = "note_db"
-	mongoColl = "notes"
+	mongoDB      = "note_db"
+	mongoColl    = "notes"
+	mongoVerColl = "note_versions"
 )
 
 // noteDoc 是 MongoDB 中存储的笔记文档结构
@@ -25,6 +26,17 @@ type noteDoc struct {
 	Title     string `bson:"title"      json:"title"`
 	Content   string `bson:"content"    json:"content"`
 	CreatedAt int64  `bson:"created_at" json:"created_at"`
+	UpdatedAt int64  `bson:"updated_at" json:"updated_at"`
+	Version   int32  `bson:"version"    json:"version"`
+}
+
+// noteVersionDoc 是 note_versions 集合中不可变的历史版本快照。
+type noteVersionDoc struct {
+	NoteID    string `bson:"note_id"    json:"note_id"`
+	Version   int32  `bson:"version"    json:"version"`
+	UserID    string `bson:"user_id"    json:"user_id"`
+	Title     string `bson:"title"      json:"title"`
+	Content   string `bson:"content"    json:"content"`
 	UpdatedAt int64  `bson:"updated_at" json:"updated_at"`
 }
 
@@ -128,4 +140,121 @@ func (m *MongoClient) DeleteByID(ctx context.Context, noteID string) (int64, err
 		return 0, err
 	}
 	return res.DeletedCount, nil
+}
+
+// versionColl 拿到 note_versions 集合。
+func (m *MongoClient) versionColl(ctx context.Context) (*mongo.Collection, error) {
+	return m.proxy.Collection(ctx, mongoDB, mongoVerColl)
+}
+
+// InsertVersion 向 note_versions 集合插入一条不可变的历史快照。
+func (m *MongoClient) InsertVersion(ctx context.Context, v *noteVersionDoc) error {
+	coll, err := m.versionColl(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = coll.InsertOne(ctx, v)
+	return err
+}
+
+// FindVersion 按 note_id + version 查询单条历史版本。
+func (m *MongoClient) FindVersion(ctx context.Context, noteID string, version int32) (*noteVersionDoc, error) {
+	coll, err := m.versionColl(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var doc noteVersionDoc
+	err = coll.FindOne(ctx, bson.M{"note_id": noteID, "version": version}).Decode(&doc)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// ListVersionsByNoteID 按 note_id 分页查询历史版本，按 version 倒序。
+func (m *MongoClient) ListVersionsByNoteID(
+	ctx context.Context, noteID string, page, pageSize int32,
+) ([]*noteVersionDoc, int64, error) {
+	coll, err := m.versionColl(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	filter := bson.M{"note_id": noteID}
+
+	total, err := coll.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	skip := int64((page - 1) * pageSize)
+	opts := options.Find().
+		SetSort(bson.D{{Key: "version", Value: -1}}).
+		SetSkip(skip).
+		SetLimit(int64(pageSize))
+
+	cur, err := coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cur.Close(ctx)
+
+	out := make([]*noteVersionDoc, 0, pageSize)
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+// FindOneAndUpdateVersion 原子操作：仅当 current version == expectedVersion 时更新 title/content，
+// version +1，updated_at 刷新，并返回更新前的文档快照。
+func (m *MongoClient) FindOneAndUpdateVersion(
+	ctx context.Context, noteID string, expectedVersion int32, title, content string,
+) (*noteDoc, error) {
+	coll, err := m.coll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{
+		"note_id": noteID,
+		"version": expectedVersion,
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"title":      title,
+			"content":    content,
+			"updated_at": nowMs(),
+			"version":    expectedVersion + 1,
+		},
+	}
+	opts := options.FindOneAndUpdate().
+		SetReturnDocument(options.Before)
+
+	var before noteDoc
+	err = coll.FindOneAndUpdate(ctx, filter, update, opts).Decode(&before)
+	if err != nil {
+		return nil, err
+	}
+	return &before, nil
+}
+
+// EnsureIndexes 确保 note_versions 集合的必要索引存在。
+func (m *MongoClient) EnsureIndexes(ctx context.Context) error {
+	coll, err := m.versionColl(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "note_id", Value: 1},
+			{Key: "version", Value: -1},
+		},
+		Options: options.Index().SetUnique(true),
+	})
+	return err
 }

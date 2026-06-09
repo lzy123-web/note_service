@@ -24,6 +24,11 @@ func main() {
 	// 把 impl 注册到指定 service name；
 	pb.RegisterNoteServiceService(s.Service("trpc.demo.note.NoteService"), impl)
 
+	// 确保 note_versions 集合的索引存在
+	if err := impl.mongo.EnsureIndexes(trpc.BackgroundContext()); err != nil {
+		log.Warnf("ensure indexes fail (non-fatal): %v", err)
+	}
+
 	// Serve 阻塞，直到返回错误就会打印fatal日志并退出
 	if err := s.Serve(); err != nil {
 		log.Fatal(err)

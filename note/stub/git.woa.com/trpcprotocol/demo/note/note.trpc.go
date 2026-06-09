@@ -21,12 +21,18 @@ import (
 type NoteServiceService interface {
 	// CreateNote 创建笔记
 	CreateNote(ctx context.Context, req *CreateNoteRequest) (*CreateNoteResponse, error)
-	// GetNote 查询单条笔记（走 Cache Aside：Redis -> MongoDB）
+	// GetNote 查询单条笔记
 	GetNote(ctx context.Context, req *GetNoteRequest) (*GetNoteResponse, error)
-	// ListNotes 查询用户笔记列表（直查 MongoDB，依赖 user_id+created_at 复合索引）
+	// ListNotes 查询用户笔记列表
 	ListNotes(ctx context.Context, req *ListNotesRequest) (*ListNotesResponse, error)
-	// DeleteNote 删除笔记（先删 Mongo 再 Del Redis 缓存）
+	// DeleteNote 删除笔记
 	DeleteNote(ctx context.Context, req *DeleteNoteRequest) (*DeleteNoteResponse, error)
+	// UpdateNote 更新笔记（乐观锁）
+	UpdateNote(ctx context.Context, req *UpdateNoteRequest) (*UpdateNoteResponse, error)
+	// ListNoteVersions 查询笔记历史版本
+	ListNoteVersions(ctx context.Context, req *ListNoteVersionsRequest) (*ListNoteVersionsResponse, error)
+	// RestoreNoteVersion 恢复指定历史版本
+	RestoreNoteVersion(ctx context.Context, req *RestoreNoteVersionRequest) (*RestoreNoteVersionResponse, error)
 }
 
 func NoteServiceService_CreateNote_Handler(svr interface{}, ctx context.Context, f server.FilterFunc) (interface{}, error) {
@@ -101,6 +107,60 @@ func NoteServiceService_DeleteNote_Handler(svr interface{}, ctx context.Context,
 	return rsp, nil
 }
 
+func NoteServiceService_UpdateNote_Handler(svr interface{}, ctx context.Context, f server.FilterFunc) (interface{}, error) {
+	req := &UpdateNoteRequest{}
+	filters, err := f(req)
+	if err != nil {
+		return nil, err
+	}
+	handleFunc := func(ctx context.Context, reqbody interface{}) (interface{}, error) {
+		return svr.(NoteServiceService).UpdateNote(ctx, reqbody.(*UpdateNoteRequest))
+	}
+
+	var rsp interface{}
+	rsp, err = filters.Filter(ctx, req, handleFunc)
+	if err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func NoteServiceService_ListNoteVersions_Handler(svr interface{}, ctx context.Context, f server.FilterFunc) (interface{}, error) {
+	req := &ListNoteVersionsRequest{}
+	filters, err := f(req)
+	if err != nil {
+		return nil, err
+	}
+	handleFunc := func(ctx context.Context, reqbody interface{}) (interface{}, error) {
+		return svr.(NoteServiceService).ListNoteVersions(ctx, reqbody.(*ListNoteVersionsRequest))
+	}
+
+	var rsp interface{}
+	rsp, err = filters.Filter(ctx, req, handleFunc)
+	if err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func NoteServiceService_RestoreNoteVersion_Handler(svr interface{}, ctx context.Context, f server.FilterFunc) (interface{}, error) {
+	req := &RestoreNoteVersionRequest{}
+	filters, err := f(req)
+	if err != nil {
+		return nil, err
+	}
+	handleFunc := func(ctx context.Context, reqbody interface{}) (interface{}, error) {
+		return svr.(NoteServiceService).RestoreNoteVersion(ctx, reqbody.(*RestoreNoteVersionRequest))
+	}
+
+	var rsp interface{}
+	rsp, err = filters.Filter(ctx, req, handleFunc)
+	if err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
 // NoteServiceServer_ServiceDesc descriptor for server.RegisterService.
 var NoteServiceServer_ServiceDesc = server.ServiceDesc{
 	ServiceName: "trpc.demo.note.NoteService",
@@ -122,6 +182,18 @@ var NoteServiceServer_ServiceDesc = server.ServiceDesc{
 			Name: "/trpc.demo.note.NoteService/DeleteNote",
 			Func: NoteServiceService_DeleteNote_Handler,
 		},
+		{
+			Name: "/trpc.demo.note.NoteService/UpdateNote",
+			Func: NoteServiceService_UpdateNote_Handler,
+		},
+		{
+			Name: "/trpc.demo.note.NoteService/ListNoteVersions",
+			Func: NoteServiceService_ListNoteVersions_Handler,
+		},
+		{
+			Name: "/trpc.demo.note.NoteService/RestoreNoteVersion",
+			Func: NoteServiceService_RestoreNoteVersion_Handler,
+		},
 	},
 }
 
@@ -141,19 +213,34 @@ func (s *UnimplementedNoteService) CreateNote(ctx context.Context, req *CreateNo
 	return nil, errors.New("rpc CreateNote of service NoteService is not implemented")
 }
 
-// GetNote 查询单条笔记（走 Cache Aside：Redis -> MongoDB）
+// GetNote 查询单条笔记
 func (s *UnimplementedNoteService) GetNote(ctx context.Context, req *GetNoteRequest) (*GetNoteResponse, error) {
 	return nil, errors.New("rpc GetNote of service NoteService is not implemented")
 }
 
-// ListNotes 查询用户笔记列表（直查 MongoDB，依赖 user_id+created_at 复合索引）
+// ListNotes 查询用户笔记列表
 func (s *UnimplementedNoteService) ListNotes(ctx context.Context, req *ListNotesRequest) (*ListNotesResponse, error) {
 	return nil, errors.New("rpc ListNotes of service NoteService is not implemented")
 }
 
-// DeleteNote 删除笔记（先删 Mongo 再 Del Redis 缓存）
+// DeleteNote 删除笔记
 func (s *UnimplementedNoteService) DeleteNote(ctx context.Context, req *DeleteNoteRequest) (*DeleteNoteResponse, error) {
 	return nil, errors.New("rpc DeleteNote of service NoteService is not implemented")
+}
+
+// UpdateNote 更新笔记（乐观锁）
+func (s *UnimplementedNoteService) UpdateNote(ctx context.Context, req *UpdateNoteRequest) (*UpdateNoteResponse, error) {
+	return nil, errors.New("rpc UpdateNote of service NoteService is not implemented")
+}
+
+// ListNoteVersions 查询笔记历史版本
+func (s *UnimplementedNoteService) ListNoteVersions(ctx context.Context, req *ListNoteVersionsRequest) (*ListNoteVersionsResponse, error) {
+	return nil, errors.New("rpc ListNoteVersions of service NoteService is not implemented")
+}
+
+// RestoreNoteVersion 恢复指定历史版本
+func (s *UnimplementedNoteService) RestoreNoteVersion(ctx context.Context, req *RestoreNoteVersionRequest) (*RestoreNoteVersionResponse, error) {
+	return nil, errors.New("rpc RestoreNoteVersion of service NoteService is not implemented")
 }
 
 // END --------------------------------- Default Unimplemented Server Service --------------------------------- END
@@ -166,12 +253,18 @@ func (s *UnimplementedNoteService) DeleteNote(ctx context.Context, req *DeleteNo
 type NoteServiceClientProxy interface {
 	// CreateNote 创建笔记
 	CreateNote(ctx context.Context, req *CreateNoteRequest, opts ...client.Option) (rsp *CreateNoteResponse, err error)
-	// GetNote 查询单条笔记（走 Cache Aside：Redis -> MongoDB）
+	// GetNote 查询单条笔记
 	GetNote(ctx context.Context, req *GetNoteRequest, opts ...client.Option) (rsp *GetNoteResponse, err error)
-	// ListNotes 查询用户笔记列表（直查 MongoDB，依赖 user_id+created_at 复合索引）
+	// ListNotes 查询用户笔记列表
 	ListNotes(ctx context.Context, req *ListNotesRequest, opts ...client.Option) (rsp *ListNotesResponse, err error)
-	// DeleteNote 删除笔记（先删 Mongo 再 Del Redis 缓存）
+	// DeleteNote 删除笔记
 	DeleteNote(ctx context.Context, req *DeleteNoteRequest, opts ...client.Option) (rsp *DeleteNoteResponse, err error)
+	// UpdateNote 更新笔记（乐观锁）
+	UpdateNote(ctx context.Context, req *UpdateNoteRequest, opts ...client.Option) (rsp *UpdateNoteResponse, err error)
+	// ListNoteVersions 查询笔记历史版本
+	ListNoteVersions(ctx context.Context, req *ListNoteVersionsRequest, opts ...client.Option) (rsp *ListNoteVersionsResponse, err error)
+	// RestoreNoteVersion 恢复指定历史版本
+	RestoreNoteVersion(ctx context.Context, req *RestoreNoteVersionRequest, opts ...client.Option) (rsp *RestoreNoteVersionResponse, err error)
 }
 
 type NoteServiceClientProxyImpl struct {
@@ -257,6 +350,66 @@ func (c *NoteServiceClientProxyImpl) DeleteNote(ctx context.Context, req *Delete
 	callopts = append(callopts, c.opts...)
 	callopts = append(callopts, opts...)
 	rsp := &DeleteNoteResponse{}
+	if err := c.client.Invoke(ctx, req, rsp, callopts...); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *NoteServiceClientProxyImpl) UpdateNote(ctx context.Context, req *UpdateNoteRequest, opts ...client.Option) (*UpdateNoteResponse, error) {
+	ctx, msg := codec.WithCloneMessage(ctx)
+	defer codec.PutBackMessage(msg)
+	msg.WithClientRPCName("/trpc.demo.note.NoteService/UpdateNote")
+	msg.WithCalleeServiceName(NoteServiceServer_ServiceDesc.ServiceName)
+	msg.WithCalleeApp("demo")
+	msg.WithCalleeServer("note")
+	msg.WithCalleeService("NoteService")
+	msg.WithCalleeMethod("UpdateNote")
+	msg.WithSerializationType(codec.SerializationTypePB)
+	callopts := make([]client.Option, 0, len(c.opts)+len(opts))
+	callopts = append(callopts, c.opts...)
+	callopts = append(callopts, opts...)
+	rsp := &UpdateNoteResponse{}
+	if err := c.client.Invoke(ctx, req, rsp, callopts...); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *NoteServiceClientProxyImpl) ListNoteVersions(ctx context.Context, req *ListNoteVersionsRequest, opts ...client.Option) (*ListNoteVersionsResponse, error) {
+	ctx, msg := codec.WithCloneMessage(ctx)
+	defer codec.PutBackMessage(msg)
+	msg.WithClientRPCName("/trpc.demo.note.NoteService/ListNoteVersions")
+	msg.WithCalleeServiceName(NoteServiceServer_ServiceDesc.ServiceName)
+	msg.WithCalleeApp("demo")
+	msg.WithCalleeServer("note")
+	msg.WithCalleeService("NoteService")
+	msg.WithCalleeMethod("ListNoteVersions")
+	msg.WithSerializationType(codec.SerializationTypePB)
+	callopts := make([]client.Option, 0, len(c.opts)+len(opts))
+	callopts = append(callopts, c.opts...)
+	callopts = append(callopts, opts...)
+	rsp := &ListNoteVersionsResponse{}
+	if err := c.client.Invoke(ctx, req, rsp, callopts...); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *NoteServiceClientProxyImpl) RestoreNoteVersion(ctx context.Context, req *RestoreNoteVersionRequest, opts ...client.Option) (*RestoreNoteVersionResponse, error) {
+	ctx, msg := codec.WithCloneMessage(ctx)
+	defer codec.PutBackMessage(msg)
+	msg.WithClientRPCName("/trpc.demo.note.NoteService/RestoreNoteVersion")
+	msg.WithCalleeServiceName(NoteServiceServer_ServiceDesc.ServiceName)
+	msg.WithCalleeApp("demo")
+	msg.WithCalleeServer("note")
+	msg.WithCalleeService("NoteService")
+	msg.WithCalleeMethod("RestoreNoteVersion")
+	msg.WithSerializationType(codec.SerializationTypePB)
+	callopts := make([]client.Option, 0, len(c.opts)+len(opts))
+	callopts = append(callopts, c.opts...)
+	callopts = append(callopts, opts...)
+	rsp := &RestoreNoteVersionResponse{}
 	if err := c.client.Invoke(ctx, req, rsp, callopts...); err != nil {
 		return nil, err
 	}

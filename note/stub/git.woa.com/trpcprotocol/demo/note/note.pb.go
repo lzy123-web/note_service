@@ -9,12 +9,11 @@
 package note
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -26,12 +25,13 @@ const (
 
 type Note struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NoteId        string                 `protobuf:"bytes,1,opt,name=note_id,json=noteId,proto3" json:"note_id,omitempty"` // 业务主键（字符串，不直接暴露 Mongo ObjectID）
+	NoteId        string                 `protobuf:"bytes,1,opt,name=note_id,json=noteId,proto3" json:"note_id,omitempty"` // 业务主键
 	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // 笔记所属用户
 	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
 	Content       string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
-	CreatedAt     int64                  `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix 毫秒，避免 google.protobuf.Timestamp 跨语言/序列化开销
+	CreatedAt     int64                  `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     int64                  `protobuf:"varint,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Version       int32                  `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"` // 版本号，创建时为 1，每次更新/恢复 +1
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -104,6 +104,13 @@ func (x *Note) GetCreatedAt() int64 {
 func (x *Note) GetUpdatedAt() int64 {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *Note) GetVersion() int32 {
+	if x != nil {
+		return x.Version
 	}
 	return 0
 }
@@ -303,7 +310,6 @@ func (x *GetNoteResponse) GetNote() *Note {
 }
 
 // ListNotes
-// 必须分页：避免大用户全量拉取，同时为后续接缓存留扩展空间
 type ListNotesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -505,12 +511,435 @@ func (*DeleteNoteResponse) Descriptor() ([]byte, []int) {
 	return file_note_proto_rawDescGZIP(), []int{8}
 }
 
+// UpdateNote
+type UpdateNoteRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	NoteId          string                 `protobuf:"bytes,1,opt,name=note_id,json=noteId,proto3" json:"note_id,omitempty"`
+	UserId          string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Title           string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Content         string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	ExpectedVersion int32                  `protobuf:"varint,5,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"` // 乐观锁：必须与当前版本匹配才允许更新
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *UpdateNoteRequest) Reset() {
+	*x = UpdateNoteRequest{}
+	mi := &file_note_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateNoteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateNoteRequest) ProtoMessage() {}
+
+func (x *UpdateNoteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_note_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateNoteRequest.ProtoReflect.Descriptor instead.
+func (*UpdateNoteRequest) Descriptor() ([]byte, []int) {
+	return file_note_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UpdateNoteRequest) GetNoteId() string {
+	if x != nil {
+		return x.NoteId
+	}
+	return ""
+}
+
+func (x *UpdateNoteRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *UpdateNoteRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *UpdateNoteRequest) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *UpdateNoteRequest) GetExpectedVersion() int32 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+type UpdateNoteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Note          *Note                  `protobuf:"bytes,1,opt,name=note,proto3" json:"note,omitempty"` // 更新后的笔记
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateNoteResponse) Reset() {
+	*x = UpdateNoteResponse{}
+	mi := &file_note_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateNoteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateNoteResponse) ProtoMessage() {}
+
+func (x *UpdateNoteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_note_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateNoteResponse.ProtoReflect.Descriptor instead.
+func (*UpdateNoteResponse) Descriptor() ([]byte, []int) {
+	return file_note_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UpdateNoteResponse) GetNote() *Note {
+	if x != nil {
+		return x.Note
+	}
+	return nil
+}
+
+// ListNoteVersions
+type ListNoteVersionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NoteId        string                 `protobuf:"bytes,1,opt,name=note_id,json=noteId,proto3" json:"note_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Page          int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty"`                         // 从 1 开始
+	PageSize      int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"` // 默认 20，上限 50
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNoteVersionsRequest) Reset() {
+	*x = ListNoteVersionsRequest{}
+	mi := &file_note_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNoteVersionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNoteVersionsRequest) ProtoMessage() {}
+
+func (x *ListNoteVersionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_note_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNoteVersionsRequest.ProtoReflect.Descriptor instead.
+func (*ListNoteVersionsRequest) Descriptor() ([]byte, []int) {
+	return file_note_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListNoteVersionsRequest) GetNoteId() string {
+	if x != nil {
+		return x.NoteId
+	}
+	return ""
+}
+
+func (x *ListNoteVersionsRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ListNoteVersionsRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListNoteVersionsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type NoteVersion struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       int32                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Content       string                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NoteVersion) Reset() {
+	*x = NoteVersion{}
+	mi := &file_note_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NoteVersion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NoteVersion) ProtoMessage() {}
+
+func (x *NoteVersion) ProtoReflect() protoreflect.Message {
+	mi := &file_note_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NoteVersion.ProtoReflect.Descriptor instead.
+func (*NoteVersion) Descriptor() ([]byte, []int) {
+	return file_note_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *NoteVersion) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *NoteVersion) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *NoteVersion) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *NoteVersion) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type ListNoteVersionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Versions      []*NoteVersion         `protobuf:"bytes,1,rep,name=versions,proto3" json:"versions,omitempty"`
+	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"` // 总条数
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNoteVersionsResponse) Reset() {
+	*x = ListNoteVersionsResponse{}
+	mi := &file_note_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNoteVersionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNoteVersionsResponse) ProtoMessage() {}
+
+func (x *ListNoteVersionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_note_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNoteVersionsResponse.ProtoReflect.Descriptor instead.
+func (*ListNoteVersionsResponse) Descriptor() ([]byte, []int) {
+	return file_note_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListNoteVersionsResponse) GetVersions() []*NoteVersion {
+	if x != nil {
+		return x.Versions
+	}
+	return nil
+}
+
+func (x *ListNoteVersionsResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+// RestoreNoteVersion
+type RestoreNoteVersionRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	NoteId          string                 `protobuf:"bytes,1,opt,name=note_id,json=noteId,proto3" json:"note_id,omitempty"`
+	UserId          string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Version         int32                  `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`                                        // 要恢复的目标历史版本号
+	ExpectedVersion int32                  `protobuf:"varint,4,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"` // 乐观锁：必须与当前版本匹配
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RestoreNoteVersionRequest) Reset() {
+	*x = RestoreNoteVersionRequest{}
+	mi := &file_note_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreNoteVersionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreNoteVersionRequest) ProtoMessage() {}
+
+func (x *RestoreNoteVersionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_note_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreNoteVersionRequest.ProtoReflect.Descriptor instead.
+func (*RestoreNoteVersionRequest) Descriptor() ([]byte, []int) {
+	return file_note_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *RestoreNoteVersionRequest) GetNoteId() string {
+	if x != nil {
+		return x.NoteId
+	}
+	return ""
+}
+
+func (x *RestoreNoteVersionRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *RestoreNoteVersionRequest) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RestoreNoteVersionRequest) GetExpectedVersion() int32 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+type RestoreNoteVersionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Note          *Note                  `protobuf:"bytes,1,opt,name=note,proto3" json:"note,omitempty"` // 恢复后的笔记
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoreNoteVersionResponse) Reset() {
+	*x = RestoreNoteVersionResponse{}
+	mi := &file_note_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreNoteVersionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreNoteVersionResponse) ProtoMessage() {}
+
+func (x *RestoreNoteVersionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_note_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreNoteVersionResponse.ProtoReflect.Descriptor instead.
+func (*RestoreNoteVersionResponse) Descriptor() ([]byte, []int) {
+	return file_note_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RestoreNoteVersionResponse) GetNote() *Note {
+	if x != nil {
+		return x.Note
+	}
+	return nil
+}
+
 var File_note_proto protoreflect.FileDescriptor
 
 const file_note_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
-	"note.proto\x12\x0etrpc.demo.note\"\xa6\x01\n" +
+	"note.proto\x12\x0etrpc.demo.note\"\xc0\x01\n" +
 	"\x04Note\x12\x17\n" +
 	"\anote_id\x18\x01 \x01(\tR\x06noteId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x14\n" +
@@ -519,7 +948,8 @@ const file_note_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\x03R\tupdatedAt\"\\\n" +
+	"updated_at\x18\x06 \x01(\x03R\tupdatedAt\x12\x18\n" +
+	"\aversion\x18\a \x01(\x05R\aversion\"\\\n" +
 	"\x11CreateNoteRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
@@ -540,14 +970,47 @@ const file_note_proto_rawDesc = "" +
 	"\x11DeleteNoteRequest\x12\x17\n" +
 	"\anote_id\x18\x01 \x01(\tR\x06noteId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"\x14\n" +
-	"\x12DeleteNoteResponse2\xdd\x02\n" +
+	"\x12DeleteNoteResponse\"\xa0\x01\n" +
+	"\x11UpdateNoteRequest\x12\x17\n" +
+	"\anote_id\x18\x01 \x01(\tR\x06noteId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\tR\acontent\x12)\n" +
+	"\x10expected_version\x18\x05 \x01(\x05R\x0fexpectedVersion\">\n" +
+	"\x12UpdateNoteResponse\x12(\n" +
+	"\x04note\x18\x01 \x01(\v2\x14.trpc.demo.note.NoteR\x04note\"|\n" +
+	"\x17ListNoteVersionsRequest\x12\x17\n" +
+	"\anote_id\x18\x01 \x01(\tR\x06noteId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\"v\n" +
+	"\vNoteVersion\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x05R\aversion\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\tR\acontent\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x04 \x01(\x03R\tupdatedAt\"i\n" +
+	"\x18ListNoteVersionsResponse\x127\n" +
+	"\bversions\x18\x01 \x03(\v2\x1b.trpc.demo.note.NoteVersionR\bversions\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\"\x92\x01\n" +
+	"\x19RestoreNoteVersionRequest\x12\x17\n" +
+	"\anote_id\x18\x01 \x01(\tR\x06noteId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\x05R\aversion\x12)\n" +
+	"\x10expected_version\x18\x04 \x01(\x05R\x0fexpectedVersion\"F\n" +
+	"\x1aRestoreNoteVersionResponse\x12(\n" +
+	"\x04note\x18\x01 \x01(\v2\x14.trpc.demo.note.NoteR\x04note2\x8c\x05\n" +
 	"\vNoteService\x12U\n" +
 	"\n" +
 	"CreateNote\x12!.trpc.demo.note.CreateNoteRequest\x1a\".trpc.demo.note.CreateNoteResponse\"\x00\x12L\n" +
 	"\aGetNote\x12\x1e.trpc.demo.note.GetNoteRequest\x1a\x1f.trpc.demo.note.GetNoteResponse\"\x00\x12R\n" +
 	"\tListNotes\x12 .trpc.demo.note.ListNotesRequest\x1a!.trpc.demo.note.ListNotesResponse\"\x00\x12U\n" +
 	"\n" +
-	"DeleteNote\x12!.trpc.demo.note.DeleteNoteRequest\x1a\".trpc.demo.note.DeleteNoteResponse\"\x00B$Z\"git.woa.com/trpcprotocol/demo/noteb\x06proto3"
+	"DeleteNote\x12!.trpc.demo.note.DeleteNoteRequest\x1a\".trpc.demo.note.DeleteNoteResponse\"\x00\x12U\n" +
+	"\n" +
+	"UpdateNote\x12!.trpc.demo.note.UpdateNoteRequest\x1a\".trpc.demo.note.UpdateNoteResponse\"\x00\x12g\n" +
+	"\x10ListNoteVersions\x12'.trpc.demo.note.ListNoteVersionsRequest\x1a(.trpc.demo.note.ListNoteVersionsResponse\"\x00\x12m\n" +
+	"\x12RestoreNoteVersion\x12).trpc.demo.note.RestoreNoteVersionRequest\x1a*.trpc.demo.note.RestoreNoteVersionResponse\"\x00B$Z\"git.woa.com/trpcprotocol/demo/noteb\x06proto3"
 
 var (
 	file_note_proto_rawDescOnce sync.Once
@@ -561,34 +1024,50 @@ func file_note_proto_rawDescGZIP() []byte {
 	return file_note_proto_rawDescData
 }
 
-var file_note_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_note_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_note_proto_goTypes = []any{
-	(*Note)(nil),               // 0: trpc.demo.note.Note
-	(*CreateNoteRequest)(nil),  // 1: trpc.demo.note.CreateNoteRequest
-	(*CreateNoteResponse)(nil), // 2: trpc.demo.note.CreateNoteResponse
-	(*GetNoteRequest)(nil),     // 3: trpc.demo.note.GetNoteRequest
-	(*GetNoteResponse)(nil),    // 4: trpc.demo.note.GetNoteResponse
-	(*ListNotesRequest)(nil),   // 5: trpc.demo.note.ListNotesRequest
-	(*ListNotesResponse)(nil),  // 6: trpc.demo.note.ListNotesResponse
-	(*DeleteNoteRequest)(nil),  // 7: trpc.demo.note.DeleteNoteRequest
-	(*DeleteNoteResponse)(nil), // 8: trpc.demo.note.DeleteNoteResponse
+	(*Note)(nil),                       // 0: trpc.demo.note.Note
+	(*CreateNoteRequest)(nil),          // 1: trpc.demo.note.CreateNoteRequest
+	(*CreateNoteResponse)(nil),         // 2: trpc.demo.note.CreateNoteResponse
+	(*GetNoteRequest)(nil),             // 3: trpc.demo.note.GetNoteRequest
+	(*GetNoteResponse)(nil),            // 4: trpc.demo.note.GetNoteResponse
+	(*ListNotesRequest)(nil),           // 5: trpc.demo.note.ListNotesRequest
+	(*ListNotesResponse)(nil),          // 6: trpc.demo.note.ListNotesResponse
+	(*DeleteNoteRequest)(nil),          // 7: trpc.demo.note.DeleteNoteRequest
+	(*DeleteNoteResponse)(nil),         // 8: trpc.demo.note.DeleteNoteResponse
+	(*UpdateNoteRequest)(nil),          // 9: trpc.demo.note.UpdateNoteRequest
+	(*UpdateNoteResponse)(nil),         // 10: trpc.demo.note.UpdateNoteResponse
+	(*ListNoteVersionsRequest)(nil),    // 11: trpc.demo.note.ListNoteVersionsRequest
+	(*NoteVersion)(nil),                // 12: trpc.demo.note.NoteVersion
+	(*ListNoteVersionsResponse)(nil),   // 13: trpc.demo.note.ListNoteVersionsResponse
+	(*RestoreNoteVersionRequest)(nil),  // 14: trpc.demo.note.RestoreNoteVersionRequest
+	(*RestoreNoteVersionResponse)(nil), // 15: trpc.demo.note.RestoreNoteVersionResponse
 }
 var file_note_proto_depIdxs = []int32{
-	0, // 0: trpc.demo.note.GetNoteResponse.note:type_name -> trpc.demo.note.Note
-	0, // 1: trpc.demo.note.ListNotesResponse.notes:type_name -> trpc.demo.note.Note
-	1, // 2: trpc.demo.note.NoteService.CreateNote:input_type -> trpc.demo.note.CreateNoteRequest
-	3, // 3: trpc.demo.note.NoteService.GetNote:input_type -> trpc.demo.note.GetNoteRequest
-	5, // 4: trpc.demo.note.NoteService.ListNotes:input_type -> trpc.demo.note.ListNotesRequest
-	7, // 5: trpc.demo.note.NoteService.DeleteNote:input_type -> trpc.demo.note.DeleteNoteRequest
-	2, // 6: trpc.demo.note.NoteService.CreateNote:output_type -> trpc.demo.note.CreateNoteResponse
-	4, // 7: trpc.demo.note.NoteService.GetNote:output_type -> trpc.demo.note.GetNoteResponse
-	6, // 8: trpc.demo.note.NoteService.ListNotes:output_type -> trpc.demo.note.ListNotesResponse
-	8, // 9: trpc.demo.note.NoteService.DeleteNote:output_type -> trpc.demo.note.DeleteNoteResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0,  // 0: trpc.demo.note.GetNoteResponse.note:type_name -> trpc.demo.note.Note
+	0,  // 1: trpc.demo.note.ListNotesResponse.notes:type_name -> trpc.demo.note.Note
+	0,  // 2: trpc.demo.note.UpdateNoteResponse.note:type_name -> trpc.demo.note.Note
+	12, // 3: trpc.demo.note.ListNoteVersionsResponse.versions:type_name -> trpc.demo.note.NoteVersion
+	0,  // 4: trpc.demo.note.RestoreNoteVersionResponse.note:type_name -> trpc.demo.note.Note
+	1,  // 5: trpc.demo.note.NoteService.CreateNote:input_type -> trpc.demo.note.CreateNoteRequest
+	3,  // 6: trpc.demo.note.NoteService.GetNote:input_type -> trpc.demo.note.GetNoteRequest
+	5,  // 7: trpc.demo.note.NoteService.ListNotes:input_type -> trpc.demo.note.ListNotesRequest
+	7,  // 8: trpc.demo.note.NoteService.DeleteNote:input_type -> trpc.demo.note.DeleteNoteRequest
+	9,  // 9: trpc.demo.note.NoteService.UpdateNote:input_type -> trpc.demo.note.UpdateNoteRequest
+	11, // 10: trpc.demo.note.NoteService.ListNoteVersions:input_type -> trpc.demo.note.ListNoteVersionsRequest
+	14, // 11: trpc.demo.note.NoteService.RestoreNoteVersion:input_type -> trpc.demo.note.RestoreNoteVersionRequest
+	2,  // 12: trpc.demo.note.NoteService.CreateNote:output_type -> trpc.demo.note.CreateNoteResponse
+	4,  // 13: trpc.demo.note.NoteService.GetNote:output_type -> trpc.demo.note.GetNoteResponse
+	6,  // 14: trpc.demo.note.NoteService.ListNotes:output_type -> trpc.demo.note.ListNotesResponse
+	8,  // 15: trpc.demo.note.NoteService.DeleteNote:output_type -> trpc.demo.note.DeleteNoteResponse
+	10, // 16: trpc.demo.note.NoteService.UpdateNote:output_type -> trpc.demo.note.UpdateNoteResponse
+	13, // 17: trpc.demo.note.NoteService.ListNoteVersions:output_type -> trpc.demo.note.ListNoteVersionsResponse
+	15, // 18: trpc.demo.note.NoteService.RestoreNoteVersion:output_type -> trpc.demo.note.RestoreNoteVersionResponse
+	12, // [12:19] is the sub-list for method output_type
+	5,  // [5:12] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_note_proto_init() }
@@ -602,7 +1081,7 @@ func file_note_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_note_proto_rawDesc), len(file_note_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

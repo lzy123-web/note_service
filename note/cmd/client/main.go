@@ -67,6 +67,61 @@ func callNoteServiceDeleteNote() {
 	log.Debugf("simple  rpc   receive: %+v", reply)
 }
 
+func callNoteServiceUpdateNote() {
+	proxy := pb.NewNoteServiceClientProxy(
+		client.WithTarget("ip://127.0.0.1:8000"),
+		client.WithProtocol("trpc"),
+	)
+	ctx := trpc.BackgroundContext()
+	reply, err := proxy.UpdateNote(ctx, &pb.UpdateNoteRequest{
+		NoteId:          "your_note_id",
+		UserId:          "your_user_id",
+		Title:           "updated title",
+		Content:         "updated content",
+		ExpectedVersion: 1,
+	})
+	if err != nil {
+		log.Fatalf("err: %v", err)
+	}
+	log.Debugf("UpdateNote receive: %+v", reply)
+}
+
+func callNoteServiceListNoteVersions() {
+	proxy := pb.NewNoteServiceClientProxy(
+		client.WithTarget("ip://127.0.0.1:8000"),
+		client.WithProtocol("trpc"),
+	)
+	ctx := trpc.BackgroundContext()
+	reply, err := proxy.ListNoteVersions(ctx, &pb.ListNoteVersionsRequest{
+		NoteId:   "your_note_id",
+		UserId:   "your_user_id",
+		Page:     1,
+		PageSize: 20,
+	})
+	if err != nil {
+		log.Fatalf("err: %v", err)
+	}
+	log.Debugf("ListNoteVersions receive: %+v", reply)
+}
+
+func callNoteServiceRestoreNoteVersion() {
+	proxy := pb.NewNoteServiceClientProxy(
+		client.WithTarget("ip://127.0.0.1:8000"),
+		client.WithProtocol("trpc"),
+	)
+	ctx := trpc.BackgroundContext()
+	reply, err := proxy.RestoreNoteVersion(ctx, &pb.RestoreNoteVersionRequest{
+		NoteId:          "your_note_id",
+		UserId:          "your_user_id",
+		Version:         2,
+		ExpectedVersion: 5,
+	})
+	if err != nil {
+		log.Fatalf("err: %v", err)
+	}
+	log.Debugf("RestoreNoteVersion receive: %+v", reply)
+}
+
 func main() {
 	// Load configuration following the logic in trpc.NewServer.
 	cfg, err := trpc.LoadConfig(trpc.ServerConfigPath)
@@ -81,4 +136,7 @@ func main() {
 	callNoteServiceGetNote()
 	callNoteServiceListNotes()
 	callNoteServiceDeleteNote()
+	callNoteServiceUpdateNote()
+	callNoteServiceListNoteVersions()
+	callNoteServiceRestoreNoteVersion()
 }

@@ -26,12 +26,15 @@ note_service/
 
 `service NoteService`（包名 `trpc.demo.note`）：
 
-| RPC          | 入参                                                         | 出参                                | 说明                                                                |
-| ------------ | ------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------- |
-| `CreateNote` | `user_id` / `title` / `content`                              | `note_id`                           | 校验非空 → 写 Mongo                                                 |
-| `GetNote`    | `note_id`                                                    | `Note`                              | 先查 Redis；未命中走 singleflight 回源 Mongo 并回填，DB 不存在写空值缓存 |
-| `ListNotes`  | `user_id` / `page` / `page_size`                             | `notes` / `total`                   | 按 `created_at` 倒序分页；`page_size` 越界兜底为 20                 |
-| `DeleteNote` | `note_id` / `user_id`                                        | 空                                  | 二次校验所有权 → 删 Mongo → 同步删 cache → 500ms 后异步再删一次     |
+| RPC                  | 入参                                                         | 出参                                | 说明                                                                |
+| -------------------- | ------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------- |
+| `CreateNote`         | `user_id` / `title` / `content`                              | `note_id`                           | 校验非空 → 写 Mongo，初始 `version=1`                              |
+| `GetNote`            | `note_id`                                                    | `Note`                              | 先查 Redis；未命中走 singleflight 回源 Mongo 并回填，DB 不存在写空值缓存 |
+| `ListNotes`          | `user_id` / `page` / `page_size`                             | `notes` / `total`                   | 按 `created_at` 倒序分页；`page_size` 越界兜底为 20                 |
+| `DeleteNote`         | `note_id` / `user_id`                                        | 空                                  | 二次校验所有权 → 删 Mongo → 同步删 cache → 500ms 后异步再删一次     |
+| `UpdateNote`         | `note_id` / `user_id` / `title` / `content` / `expected_version` | `Note`                          | 乐观锁更新：版本匹配才更新 → 版本 +1 → 写历史快照 → 延迟双删缓存    |
+| `ListNoteVersions`   | `note_id` / `user_id` / `page` / `page_size`                 | `versions` / `total`                | 按 `version` 倒序分页查询历史；`page_size` 默认 20，上限 50；无缓存 |
+| `RestoreNoteVersion` | `note_id` / `user_id` / `version` / `expected_version`       | `Note`                              | 恢复指定历史版本为新版本 → 写当前快照 → 延迟双删缓存                 |
 
 完整定义见 [`note.proto`](./note.proto)。
 
@@ -42,7 +45,7 @@ note_service/
 - **缓存穿透**：DB 查不到时写入 `__NULL__` 空值标记，TTL 60 秒；后续相同 `note_id` 直接返回 `NoteNotFound`。
 - **缓存雪崩**：正向缓存 TTL 为 `30min + rand(0, 5min)`，避免大批 key 同时过期。
 - **缓存击穿**：用 `golang.org/x/sync/singleflight` 按 `note_id` 维度合并并发回源请求。
-- **强一致**：删除接口采用**延迟双删** —— 先删 DB，立即删一次 cache，500ms 后再异步删一次，覆盖 `read-after-write` 竞态窗口。
+- **强一致**：删除接口采用**延迟双删** —— 先删 DB，立即删一次 cache，500ms 后再异步删一次，覆盖 `read-after-write` 竞态窗口。`UpdateNote` 和 `RestoreNoteVersion` 同样采用延迟双删策略，确保更新/恢复后缓存失效。
 - **降级**：Redis 自身故障时不阻塞主流程，记 warn 日志后直查 DB。
 - **ctx 解耦**：singleflight `fn` 内用 `context.WithoutCancel(ctx)` 剥离上游 cancel/deadline，仅保留 trace、logger 等 value，防止首请求被取消时连带影响并发等待者。
 
@@ -56,6 +59,8 @@ note_service/
 | `ErrCodeNoteNotFound`      | 10002   | 笔记不存在         |
 | `ErrCodePermissionDenied`  | 10003   | 越权操作           |
 | `ErrCodeInternal`          | 10004   | 服务器内部错误     |
+| `ErrCodeVersionConflict`   | 10005   | 版本冲突           |
+| `ErrCodeVersionNotFound`   | 10006   | 历史版本不存在     |
 
 通过 `errs.New(code, msg)` 返回；调用方用 `errs.Code(err)` / `errs.Msg(err)` 解析。
 
